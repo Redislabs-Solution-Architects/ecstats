@@ -173,10 +173,11 @@ def writeClusterInfo(clustersInfo):
         f.write("\r\n")
 
 
-customer = "customerEC"
-f= open("%s.csv" % customer,"w+")
 with open(sys.argv[1]) as config_file:
     inputParams = json.load(config_file)
+
+outputFile = inputParams['outputFile']
+f= open("%s.csv" % outputFile,"w+")
 
 accessKey = inputParams['accessKey']
 secretKey = inputParams['secretKey']

@@ -45,6 +45,7 @@ The pullStatsConfig.json should contain the following information
 {
     "accessKey": "Your AWS Access Key",
     "secretKey": "Your AWS Secret Key",
+    "outputFile": "File Name",
     "region": "AWS region for example us-east-2"
 }
 ```
