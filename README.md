@@ -17,7 +17,7 @@ You can see a sample out put sampleStats.csv in the outputs folder.
 
 ```
 # Clone:
-git clone https://github.com/ohadisraeli/ecmigrator
+git clone https://github.com/Redislabs-Solution-Architects/EC2RL
 
 # Prepare virtualenv:
 cd ecmigrator
