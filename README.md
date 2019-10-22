@@ -20,7 +20,7 @@ You can see a sample out put sampleStats.csv in the outputs folder.
 git clone https://github.com/Redislabs-Solution-Architects/EC2RL
 
 # Prepare virtualenv:
-cd ecmigrator
+cd EC2RL
 mkdir .env
 virtualenv .env
 
