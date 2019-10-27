@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # input params
 # path to the config file, see pullStatsConfig.json
 
