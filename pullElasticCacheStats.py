@@ -3,7 +3,7 @@
 # input params
 # path to the config file, see pullStatsConfig.json
 
-import boto3, json, datetime, sys
+import boto3, json, datetime, sys, os
 from collections import defaultdict
 
 def getCmdMetrics():
@@ -29,14 +29,14 @@ def calc_expiry_time(expiry):
     """
     return (expiry.replace(tzinfo=None) - datetime.datetime.utcnow()).days
 
-def getClustersInfo(session):
+def getClustersInfo():
     """Calculate the running/reserved instances in ElastiCache.
     Args:
         session (:boto3:session.Session): The authenticated boto3 session.
     Returns:
         A dictionary of the running/reserved instances for ElastiCache nodes.
     """
-    conn = session.client('elasticache')
+    conn = boto3.client('elasticache')
     results = {
         'elc_running_instances': {},
         'elc_reserved_instances': {},
@@ -99,7 +99,20 @@ def writeCmdMetric(clusterId, node, metric):
             max = rec['Maximum']
     
     f.write("%s," % max)
-    
+
+def getParam(config, paramName):
+    if paramName in os.environ:
+        try:
+            return json.loads(os.environ.get(paramName))  # Handles numbers, bools
+        except ValueError:
+            return os.environ.get(paramName)
+    if paramName in config:
+        try:
+            return json.loads(config[paramName])  # Handles numbers, bools
+        except ValueError:
+            return config[paramName]
+        
+
 def writeMetric(clusterId, node, metric):
     """Write node related metrics to file
     Args:
@@ -178,22 +191,15 @@ def writeClusterInfo(clustersInfo):
 with open(sys.argv[1]) as config_file:
     inputParams = json.load(config_file)
 
-outputFile = inputParams['outputFile']
-f= open("%s.csv" % outputFile,"w+")
+outputFile = getParam(inputParams, 'outputFile')
 
-accessKey = inputParams['accessKey']
-secretKey = inputParams['secretKey']
-region = inputParams['region']
+f= open("%s.csv" % outputFile,"w+")
 
 # connect to ec 
 # aws key, secret and region
-session = boto3.Session(
-    aws_access_key_id=accessKey, 
-    aws_secret_access_key=secretKey,
-    region_name=region)
+cw = boto3.client('cloudwatch')
+pr = boto3.client('ce')
 
-cw = session.client('cloudwatch')
-pr = session.client('ce')
 now = datetime.datetime.now()
 start = (now - datetime.timedelta(days=30)).strftime('%Y-%m-%d')
 end = now.strftime('%Y-%m-%d')
@@ -210,7 +216,7 @@ print('Grab a coffee this script takes a while...')
 print('Writing Headers')
 writeHeaders()
 print('Gathring data...')
-clustersInfo = getClustersInfo(session)
+clustersInfo = getClustersInfo()
 writeClusterInfo(clustersInfo)
 f.write("\r\n")
 f.write("####Total costs per month####  %s" % costs)
