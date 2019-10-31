@@ -32,7 +32,6 @@ def calc_expiry_time(expiry):
 def getClustersInfo():
     """Calculate the running/reserved instances in ElastiCache.
     Args:
-        session (:boto3:session.Session): The authenticated boto3 session.
     Returns:
         A dictionary of the running/reserved instances for ElastiCache nodes.
     """
@@ -205,7 +204,8 @@ start = (now - datetime.timedelta(days=30)).strftime('%Y-%m-%d')
 end = now.strftime('%Y-%m-%d')
 pricingData = pr.get_cost_and_usage(TimePeriod={'Start': start, 'End':  end}, 
     Granularity='MONTHLY',
-    Filter={"Dimensions": {'Key': 'SERVICE', 'Values':['Amazon ElastiCache']}}, 
+    Filter={"And": [{"Dimensions": {'Key': 'REGION', 'Values': [region]}},\
+    {"Dimensions": {'Key': 'SERVICE', 'Values':['Amazon ElastiCache']}}]},
     Metrics=['UnblendedCost'])
 
 costs = 0
