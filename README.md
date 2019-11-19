@@ -35,7 +35,7 @@ deactivate
 ```
 
 In order to run the script configure your AWS_* environment variables and
-pass the path to the JSON config file:
+pass the path to the JSON config file or specify all the parameters in the config file:
 
 ```
 export AWS_ACCESS_KEY_ID=<ACCESS KEY ID>

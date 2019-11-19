@@ -3,6 +3,7 @@
 # input params
 # path to the config file, see pullStatsConfig.json
 
+import pandas as pd
 import boto3, json, datetime, sys, os
 from collections import defaultdict
 
@@ -29,13 +30,14 @@ def calc_expiry_time(expiry):
     """
     return (expiry.replace(tzinfo=None) - datetime.datetime.utcnow()).days
 
-def getClustersInfo():
+def getClustersInfo(session):
     """Calculate the running/reserved instances in ElastiCache.
     Args:
+        session (:boto3:session.Session): The authenticated boto3 session.
     Returns:
         A dictionary of the running/reserved instances for ElastiCache nodes.
     """
-    conn = boto3.client('elasticache')
+    conn = session.client('elasticache')
     results = {
         'elc_running_instances': {},
         'elc_reserved_instances': {},
@@ -98,7 +100,7 @@ def writeCmdMetric(clusterId, node, metric):
             max = rec['Maximum']
     
     f.write("%s," % max)
-
+    
 def getParam(config, paramName):
     if paramName in os.environ:
         try:
@@ -172,54 +174,83 @@ def writeClusterInfo(clustersInfo):
             for metric in getCmdMetrics():
                 writeCmdMetric(instanceId, node.get('CacheNodeId'), metric)
             f.write("\r\n")
+    
+    f.close()
 
-    f.write("\r\n")
-    f.write("\r\n")
-    f.write("###Reserved Instances")
-    f.write("\r\n")
-    f.write("Instance Type, Count, Remaining Time (days)")
-    f.write("\r\n")
+
+def processClusterInfo():
+    """Load the information and sort the results according ClusterId
+    Args:
+    Returns:
+    """
+    outputDF = pd.read_csv(outputFilePath)
+    outputDF.sort_values(by=['ClusterId'], inplace=True)
+    outputDF.to_csv(outputFilePath)
+
+def writeReservedInstances(outputFile, clustersInfo):
+    outputFile.write("\r\n")
+    outputFile.write("\r\n")
+    outputFile.write("###Reserved Instances")
+    outputFile.write("\r\n")
+    outputFile.write("Instance Type, Count, Remaining Time (days)")
+    outputFile.write("\r\n")
     
     for instanceId, instanceDetails in clustersInfo['elc_reserved_instances'].items():
-        f.write("%s," % instanceId)
-        f.write("%s," % instanceDetails['count'])
-        f.write("%s," % instanceDetails['expiry_time'])
-        f.write("\r\n")
+        outputFile.write("%s," % instanceId)
+        outputFile.write("%s," % instanceDetails['count'])
+        outputFile.write("%s," % instanceDetails['expiry_time'])
+        outputFile.write("\r\n")
 
+def writeCosts(outputFile):
+    pr = session.client('ce')
+    now = datetime.datetime.now()
+    start = (now - datetime.timedelta(days=30)).strftime('%Y-%m-%d')
+    end = now.strftime('%Y-%m-%d')
+    pricingData = pr.get_cost_and_usage(TimePeriod={'Start': start, 'End':  end}, 
+        Granularity='MONTHLY',
+        Filter={"And": [{"Dimensions": {'Key': 'REGION', 'Values': [region]}},\
+        {"Dimensions": {'Key': 'SERVICE', 'Values':['Amazon ElastiCache']}}]},
+        Metrics=['UnblendedCost'])
+
+    costs = 0
+    for res in pricingData['ResultsByTime']:
+        costs = costs + float(res['Total']['UnblendedCost']['Amount'])    
+
+    outputFile.write("\r\n")
+    outputFile.write("####Total costs per month####  %s" % costs)
+    outputFile.close()
+    print('###Done###')
+
+
+def processAWSAccount():
+    print('Grab a coffee this script takes a while...')
+    print('Writing Headers')
+    writeHeaders()
+    print('Gathring data...')
+    clustersInfo = getClustersInfo(session)
+    writeClusterInfo(clustersInfo)
+    processClusterInfo()
+    outputFile = open(outputFilePath, "a")
+    writeReservedInstances(outputFile, clustersInfo)
+    writeCosts(outputFile)
 
 with open(sys.argv[1]) as config_file:
     inputParams = json.load(config_file)
 
-outputFile = getParam(inputParams, 'outputFile')
+outputFilePath = "%s.csv" % getParam(inputParams, 'outputFile')
+region = getParam(inputParams, 'region')
+accessKey = getParam(inputParams, 'accessKey')
+secretKey = getParam(inputParams, 'secretKey')
 
-f= open("%s.csv" % outputFile,"w+")
+f= open(outputFilePath,"w+")
 
-# connect to ec 
+# connect to ElastiCache 
 # aws key, secret and region
-cw = boto3.client('cloudwatch')
-pr = boto3.client('ce')
+session = boto3.Session(
+    aws_access_key_id=accessKey, 
+    aws_secret_access_key=secretKey,
+    region_name=region)
 
-now = datetime.datetime.now()
-start = (now - datetime.timedelta(days=30)).strftime('%Y-%m-%d')
-end = now.strftime('%Y-%m-%d')
-pricingData = pr.get_cost_and_usage(TimePeriod={'Start': start, 'End':  end}, 
-    Granularity='MONTHLY',
-    Filter={"And": [{"Dimensions": {'Key': 'REGION', 'Values': [region]}},\
-    {"Dimensions": {'Key': 'SERVICE', 'Values':['Amazon ElastiCache']}}]},
-    Metrics=['UnblendedCost'])
-
-costs = 0
-for res in pricingData['ResultsByTime']:
-    costs = costs + float(res['Total']['UnblendedCost']['Amount'])    
-
-print('Grab a coffee this script takes a while...')
-print('Writing Headers')
-writeHeaders()
-print('Gathring data...')
-clustersInfo = getClustersInfo()
-writeClusterInfo(clustersInfo)
-f.write("\r\n")
-f.write("####Total costs per month####  %s" % costs)
-print('###Done###')
-
+cw = session.client('cloudwatch')
+processAWSAccount()
 
