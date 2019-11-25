@@ -202,6 +202,8 @@ def writeReservedInstances(outputFile, clustersInfo):
         outputFile.write("\r\n")
 
 def writeCosts(outputFile):
+    outputFile.write("\r\n")
+    outputFile.write("costs\r\n")
     pr = session.client('ce')
     now = datetime.datetime.now()
     start = (now - datetime.timedelta(days=30)).strftime('%Y-%m-%d')
@@ -216,7 +218,6 @@ def writeCosts(outputFile):
     for res in pricingData['ResultsByTime']:
         costs = costs + float(res['Total']['UnblendedCost']['Amount'])    
 
-    outputFile.write("\r\n")
     outputFile.write("####Total costs per month####  %s" % costs)
     outputFile.close()
     print('###Done###')
