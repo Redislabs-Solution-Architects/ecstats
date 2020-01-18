@@ -43,5 +43,7 @@ cp config.cfg.example config.cfg
 # run the script
 python pullElasticCacheStats.py -c config.cfg
 
+# The script will output CSV files in the local directory
+
 ```
 
