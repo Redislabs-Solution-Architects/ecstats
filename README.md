@@ -34,22 +34,14 @@ pip install -r requirements.txt
 deactivate
 ```
 
-In order to run the script configure your AWS_* environment variables and
-pass the path to the JSON config file or specify all the parameters in the config file:
+## Configuring and Running
 
 ```
-export AWS_ACCESS_KEY_ID=<ACCESS KEY ID>
-export AWS_SECRET_ACCESS_KEY=<SECRET ACCESS KEY>
-export AWS_DEFAULT_REGION=<REGION>
-export AWS_REGION=<REGION>
+# copy the configuration file and edit
+cp config.cfg.example config.cfg
 
-python pullElasticCacheStats.py pullStatsConfig.json
-```
+# run the script
+python pullElasticCacheStats.py -c config.cfg
 
-The pullStatsConfig.json should contain the following information
-```
-{
-    "outputFile": "File Name"
-}
 ```
 
