@@ -228,8 +228,15 @@ def main():
     parser = OptionParser()
     parser.add_option("-c", "--config", dest="configFile",
                   help="Location of configuration file", metavar="FILE")
+    parser.add_option("-d", "--out-dir", dest="outDir", default=".",
+                  help="directory to write the results in", metavar="PATH")
     
+
     (options, args) = parser.parse_args()
+
+    if options.configFile == None:
+        print("Please run with -h for help")
+        sys.exit(1)
 
     config = ConfigParser.ConfigParser()
     config.read(options.configFile)
@@ -240,7 +247,10 @@ def main():
         accessKey = config.get(section, 'aws_access_key_id')
         secretKey = config.get(section, 'aws_secret_access_key')
 
-        outputFilePath = "%s-%s.csv" % (section, region)
+        if not os.path.isdir(options.outDir):
+            os.makedirs(options.outDir)
+
+        outputFilePath = "%s/%s-%s.csv" % (options.outDir, section, region)
 
         outfile = open(outputFilePath,"w+")
 
