@@ -5,6 +5,6 @@
 .env
 
 # Ensure that someone doesn't accidentally check in their credentials
-pullStatsConfig.json 
+pullStatsConfig.json
 launch.json
 settings.json
