@@ -3,14 +3,9 @@
 # input params
 # path to the config file, see pullStatsConfig.json
 
-import datetime
-import json
-import os
-import sys
-
-import boto3
+import boto3, json, datetime, sys, os, getopt, ConfigParser
 import pandas as pd
-
+from optparse import OptionParser
 
 def getCmdMetrics():
     metrics = [
@@ -110,20 +105,6 @@ def writeCmdMetric(clusterId, node, metric):
 
     f.write("%s," % max)
 
-
-def getParam(config, paramName):
-    if paramName in os.environ:
-        try:
-            return json.loads(os.environ.get(paramName))  # Handles numbers, bools
-        except ValueError:
-            return os.environ.get(paramName)
-    if paramName in config:
-        try:
-            return json.loads(config[paramName])  # Handles numbers, bools
-        except ValueError:
-            return config[paramName]
-
-
 def writeMetric(clusterId, node, metric):
     """Write node related metrics to file
     Args:
@@ -150,21 +131,19 @@ def writeMetric(clusterId, node, metric):
 
     f.write("%s," % max)
 
-
-def writeHeaders():
+def writeHeaders(outputFile):
     """Write file headers to the csv file
     Args:
     Returns:
     """
-    f.write('ClusterId,NodeId,NodeType,Region,')
+    outputFile.write('ClusterId,NodeId,NodeType,Region,')
     for metric in getMetrics():
-        f.write('%s (max over last week),' % metric)
+        outputFile.write('%s (max over last week),' % metric)
     for metric in getCmdMetrics():
-        f.write('%s (peak last week / hour),' % metric)
-    f.write("\r\n")
+        outputFile.write('%s (peak last week / hour),' % metric)
+    outputFile.write("\r\n")
 
-
-def writeClusterInfo(clustersInfo):
+def writeClusterInfo(outputFile, clustersInfo):
     """Write all the data gathered to the file
     Args:
         The cluster information dictionary
@@ -174,25 +153,25 @@ def writeClusterInfo(clustersInfo):
         for node in instanceDetails.get('CacheNodes'):
             print("Getting node % s details" % (instanceDetails['CacheClusterId']))
             if 'ReplicationGroupId' in instanceDetails:
-                f.write("%s," % instanceDetails['ReplicationGroupId'])
+                outputFile.write("%s," % instanceDetails['ReplicationGroupId'])
             else:
-                f.write(",")
+                outputFile.write(",")
 
-            f.write("%s," % instanceId)
-            f.write("%s," % instanceDetails['CacheNodeType'])
-            f.write("%s," % instanceDetails['PreferredAvailabilityZone'])
+            outputFile.write("%s," % instanceId)
+            outputFile.write("%s," % instanceDetails['CacheNodeType'])
+            outputFile.write("%s," % instanceDetails['PreferredAvailabilityZone'])
             for metric in getMetrics():
                 writeMetric(instanceId, node.get('CacheNodeId'), metric)
             for metric in getCmdMetrics():
                 writeCmdMetric(instanceId, node.get('CacheNodeId'), metric)
-            f.write("\r\n")
+            outputFile.write("\r\n")
+    outputFile.close()
 
-    f.close()
 
-
-def processClusterInfo():
+def processClusterInfo(outputFilePath):
     """Load the information and sort the results according ClusterId
     Args:
+        Takes the outputfile
     Returns:
     """
     outputDF = pd.read_csv(outputFilePath)
@@ -214,20 +193,18 @@ def writeReservedInstances(outputFile, clustersInfo):
         outputFile.write("%s," % instanceDetails['expiry_time'])
         outputFile.write("\r\n")
 
-
-def writeCosts(outputFile):
+def writeCosts(outputFile, session):
     outputFile.write("\r\n")
     outputFile.write("costs\r\n")
     pr = session.client('ce')
     now = datetime.datetime.now()
     start = (now - datetime.timedelta(days=30)).strftime('%Y-%m-%d')
     end = now.strftime('%Y-%m-%d')
-    pricingData = pr.get_cost_and_usage(TimePeriod={'Start': start, 'End': end},
-                                        Granularity='MONTHLY',
-                                        Filter={"And": [{"Dimensions": {'Key': 'REGION', 'Values': [region]}}, \
-                                                        {"Dimensions": {'Key': 'SERVICE',
-                                                                        'Values': ['Amazon ElastiCache']}}]},
-                                        Metrics=['UnblendedCost'])
+    pricingData = pr.get_cost_and_usage(TimePeriod={'Start': start, 'End':  end}, 
+        Granularity='MONTHLY',
+        Filter={"And": [{"Dimensions": {'Key': 'REGION', 'Values': [session.region_name]}},
+        {"Dimensions": {'Key': 'SERVICE', 'Values':['Amazon ElastiCache']}}]},
+        Metrics=['UnblendedCost'])
 
     costs = 0
     for res in pricingData['ResultsByTime']:
@@ -238,35 +215,59 @@ def writeCosts(outputFile):
     print('###Done###')
 
 
-def processAWSAccount():
+def processAWSAccount(session, outputFile, outputFilePath):
     print('Grab a coffee this script takes a while...')
     print('Writing Headers')
-    writeHeaders()
+    writeHeaders(outputFile)
     print('Gathering data...')
     clustersInfo = getClustersInfo(session)
-    writeClusterInfo(clustersInfo)
-    processClusterInfo()
+    writeClusterInfo(outputFile, clustersInfo)
+    processClusterInfo(outputFilePath)
     outputFile = open(outputFilePath, "a")
     writeReservedInstances(outputFile, clustersInfo)
-    writeCosts(outputFile)
+    writeCosts(outputFile, session)
+
+def main():
+    parser = OptionParser()
+    parser.add_option("-c", "--config", dest="configFile",
+                  help="Location of configuration file", metavar="FILE")
+    parser.add_option("-d", "--out-dir", dest="outDir", default=".",
+                  help="directory to write the results in", metavar="PATH")
+    
+
+    (options, args) = parser.parse_args()
+
+    if options.configFile == None:
+        print("Please run with -h for help")
+        sys.exit(1)
+
+    config = ConfigParser.ConfigParser()
+    config.read(options.configFile)
+
+    for section in config.sections():
+
+        region = config.get(section, 'region')
+        accessKey = config.get(section, 'aws_access_key_id')
+        secretKey = config.get(section, 'aws_secret_access_key')
+
+        if not os.path.isdir(options.outDir):
+            os.makedirs(options.outDir)
+
+        outputFilePath = "%s/%s-%s.csv" % (options.outDir, section, region)
+
+        outfile = open(outputFilePath,"w+")
+
+        # connect to ElastiCache 
+        # aws key, secret and region
+        session = boto3.Session(
+            aws_access_key_id=accessKey, 
+            aws_secret_access_key=secretKey,
+            region_name=region)
+
+        cw = session.client('cloudwatch')
+        processAWSAccount(session, outfile, outputFilePath)
 
 
-with open(sys.argv[1]) as config_file:
-    inputParams = json.load(config_file)
 
-outputFilePath = "%s.csv" % getParam(inputParams, 'outputFile')
-region = getParam(inputParams, 'region')
-accessKey = getParam(inputParams, 'accessKey')
-secretKey = getParam(inputParams, 'secretKey')
-
-f = open(outputFilePath, "w+")
-
-# connect to ElastiCache 
-# aws key, secret and region
-session = boto3.Session(
-    aws_access_key_id=accessKey,
-    aws_secret_access_key=secretKey,
-    region_name=region)
-
-cw = session.client('cloudwatch')
-processAWSAccount()
+if __name__ == "__main__" :
+    main()
