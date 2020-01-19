@@ -47,3 +47,5 @@ Execute
 ```
 python pullElasticCacheStats.py -c config.cfg
 ```
+
+The output will be a CSV files named according to the sections and region which are in the config file. 

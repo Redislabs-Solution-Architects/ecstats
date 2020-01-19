@@ -3,9 +3,10 @@
 # input params
 # path to the config file, see pullStatsConfig.json
 
-import boto3, json, datetime, sys, os, getopt, ConfigParser
+import boto3, json, datetime, sys, os, getopt
 import pandas as pd
 from optparse import OptionParser
+from configparser import ConfigParser
 
 def getCmdMetrics():
     metrics = [
@@ -79,13 +80,13 @@ def getClustersInfo(session):
     return results
 
 
-def writeCmdMetric(clusterId, node, metric):
+def writeCmdMetric(cloudWatch, clusterId, node, metric, outputFile):
     """Write Redis commands metrics to the file
     Args:
         ClusterId, node and metric to write
     Returns:
     """
-    response = cw.get_metric_statistics(
+    response = cloudWatch.get_metric_statistics(
         Namespace='AWS/ElastiCache',
         MetricName=metric,
         Dimensions=[
@@ -103,15 +104,15 @@ def writeCmdMetric(clusterId, node, metric):
         if (rec['Maximum'] > max):
             max = rec['Maximum']
 
-    f.write("%s," % max)
+    outputFile.write("%s," % max)
 
-def writeMetric(clusterId, node, metric):
+def writeMetric(cloudWatch, clusterId, node, metric, outputFile):
     """Write node related metrics to file
     Args:
         ClusterId, node and metric to write
     Returns:
     """
-    response = cw.get_metric_statistics(
+    response = cloudWatch.get_metric_statistics(
         Namespace='AWS/ElastiCache',
         MetricName=metric,
         Dimensions=[
@@ -129,7 +130,7 @@ def writeMetric(clusterId, node, metric):
         if (rec['Maximum'] > max):
             max = rec['Maximum']
 
-    f.write("%s," % max)
+    outputFile.write("%s," % max)
 
 def writeHeaders(outputFile):
     """Write file headers to the csv file
@@ -143,7 +144,7 @@ def writeHeaders(outputFile):
         outputFile.write('%s (peak last week / hour),' % metric)
     outputFile.write("\r\n")
 
-def writeClusterInfo(outputFile, clustersInfo):
+def writeClusterInfo(outputFile, clustersInfo, cloudWatch):
     """Write all the data gathered to the file
     Args:
         The cluster information dictionary
@@ -161,9 +162,9 @@ def writeClusterInfo(outputFile, clustersInfo):
             outputFile.write("%s," % instanceDetails['CacheNodeType'])
             outputFile.write("%s," % instanceDetails['PreferredAvailabilityZone'])
             for metric in getMetrics():
-                writeMetric(instanceId, node.get('CacheNodeId'), metric)
+                writeMetric(cloudWatch, instanceId, node.get('CacheNodeId'), metric, outputFile)
             for metric in getCmdMetrics():
-                writeCmdMetric(instanceId, node.get('CacheNodeId'), metric)
+                writeCmdMetric(cloudWatch, instanceId, node.get('CacheNodeId'), metric, outputFile)
             outputFile.write("\r\n")
     outputFile.close()
 
@@ -221,7 +222,8 @@ def processAWSAccount(session, outputFile, outputFilePath):
     writeHeaders(outputFile)
     print('Gathering data...')
     clustersInfo = getClustersInfo(session)
-    writeClusterInfo(outputFile, clustersInfo)
+    cloudWatch = session.client('cloudwatch')
+    writeClusterInfo(outputFile, clustersInfo, cloudWatch)
     processClusterInfo(outputFilePath)
     outputFile = open(outputFilePath, "a")
     writeReservedInstances(outputFile, clustersInfo)
@@ -241,7 +243,7 @@ def main():
         print("Please run with -h for help")
         sys.exit(1)
 
-    config = ConfigParser.ConfigParser()
+    config = ConfigParser()
     config.read(options.configFile)
 
     for section in config.sections():
@@ -264,7 +266,6 @@ def main():
             aws_secret_access_key=secretKey,
             region_name=region)
 
-        cw = session.client('cloudwatch')
         processAWSAccount(session, outfile, outputFilePath)
 
 
