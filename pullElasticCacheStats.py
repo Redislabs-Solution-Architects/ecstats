@@ -3,23 +3,24 @@
 # input params
 # path to the config file, see pullStatsConfig.json
 
-import pandas as pd
 import boto3, json, datetime, sys, os, getopt, ConfigParser
-from collections import defaultdict
+import pandas as pd
 from optparse import OptionParser
 
 def getCmdMetrics():
     metrics = [
-        'GetTypeCmds', 'HashBasedCmds','HyperLogLogBasedCmds', 'KeyBasedCmds', 'ListBasedCmds', 'SetBasedCmds', 
+        'GetTypeCmds', 'HashBasedCmds', 'HyperLogLogBasedCmds', 'KeyBasedCmds', 'ListBasedCmds', 'SetBasedCmds',
         'SetTypeCmds', 'SortedSetBasedCmds', 'StringBasedCmds', 'StreamBasedCmds']
     return metrics
+
 
 def getMetrics():
     metrics = [
         'CurrItems', 'BytesUsedForCache', 'CacheHits', 'CacheMisses', 'CurrConnections',
-        'NetworkBytesIn', 'NetworkBytesOut', 'NetworkPacketsIn', 'NetworkPacketsOut', 
-        'EngineCPUUtilization', 'Evictions', 'ReplicationBytes', 'ReplicationLag',]
+        'NetworkBytesIn', 'NetworkBytesOut', 'NetworkPacketsIn', 'NetworkPacketsOut',
+        'EngineCPUUtilization', 'Evictions', 'ReplicationBytes', 'ReplicationLag', ]
     return metrics
+
 
 def calc_expiry_time(expiry):
     """Calculate the number of days until the reserved instance expires.
@@ -30,6 +31,7 @@ def calc_expiry_time(expiry):
         The number of days between the expiration date and now.
     """
     return (expiry.replace(tzinfo=None) - datetime.datetime.utcnow()).days
+
 
 def getClustersInfo(session):
     """Calculate the running/reserved instances in ElastiCache.
@@ -43,7 +45,7 @@ def getClustersInfo(session):
         'elc_running_instances': {},
         'elc_reserved_instances': {},
     }
-    
+
     paginator = conn.get_paginator('describe_cache_clusters')
     page_iterator = paginator.paginate(ShowCacheNodeInfo=True)
     # Loop through running ElastiCache instance and record their engine,
@@ -67,14 +69,15 @@ def getClustersInfo(session):
                 # No end datetime is returned, so calculate from 'StartTime'
                 # (a `DateTime`) and 'Duration' in seconds (integer)
                 expiry_time = reserved_instance[
-                    'StartTime'] + datetime.timedelta(
-                        seconds=reserved_instance['Duration'])
+                                  'StartTime'] + datetime.timedelta(
+                    seconds=reserved_instance['Duration'])
                 results['elc_reserved_instances'][(instance_type)] = {
                     'count': reserved_instance['CacheNodeCount'],
                     'expiry_time': calc_expiry_time(expiry=expiry_time)
                 }
 
-    return results    
+    return results
+
 
 def writeCmdMetric(clusterId, node, metric):
     """Write Redis commands metrics to the file
@@ -97,11 +100,11 @@ def writeCmdMetric(clusterId, node, metric):
 
     max = 0
     for rec in response['Datapoints']:
-        if(rec['Maximum'] > max):
+        if (rec['Maximum'] > max):
             max = rec['Maximum']
-    
+
     f.write("%s," % max)
-    
+
 def writeMetric(clusterId, node, metric):
     """Write node related metrics to file
     Args:
@@ -123,9 +126,9 @@ def writeMetric(clusterId, node, metric):
 
     max = 0
     for rec in response['Datapoints']:
-        if(rec['Maximum'] > max):
+        if (rec['Maximum'] > max):
             max = rec['Maximum']
-    
+
     f.write("%s," % max)
 
 def writeHeaders(outputFile):
@@ -148,7 +151,7 @@ def writeClusterInfo(outputFile, clustersInfo):
     """
     for instanceId, instanceDetails in clustersInfo['elc_running_instances'].items():
         for node in instanceDetails.get('CacheNodes'):
-            print("Getting node % s details" %(instanceDetails['CacheClusterId']))
+            print("Getting node % s details" % (instanceDetails['CacheClusterId']))
             if 'ReplicationGroupId' in instanceDetails:
                 outputFile.write("%s," % instanceDetails['ReplicationGroupId'])
             else:
@@ -162,7 +165,6 @@ def writeClusterInfo(outputFile, clustersInfo):
             for metric in getCmdMetrics():
                 writeCmdMetric(instanceId, node.get('CacheNodeId'), metric)
             outputFile.write("\r\n")
-    
     outputFile.close()
 
 
@@ -176,6 +178,7 @@ def processClusterInfo(outputFilePath):
     outputDF.sort_values(by=['ClusterId'], inplace=True)
     outputDF.to_csv(outputFilePath)
 
+
 def writeReservedInstances(outputFile, clustersInfo):
     outputFile.write("\r\n")
     outputFile.write("\r\n")
@@ -183,7 +186,7 @@ def writeReservedInstances(outputFile, clustersInfo):
     outputFile.write("\r\n")
     outputFile.write("Instance Type, Count, Remaining Time (days)")
     outputFile.write("\r\n")
-    
+
     for instanceId, instanceDetails in clustersInfo['elc_reserved_instances'].items():
         outputFile.write("%s," % instanceId)
         outputFile.write("%s," % instanceDetails['count'])
@@ -205,7 +208,7 @@ def writeCosts(outputFile, session):
 
     costs = 0
     for res in pricingData['ResultsByTime']:
-        costs = costs + float(res['Total']['UnblendedCost']['Amount'])    
+        costs = costs + float(res['Total']['UnblendedCost']['Amount'])
 
     outputFile.write("####Total costs per month####  %s" % costs)
     outputFile.close()
@@ -216,7 +219,7 @@ def processAWSAccount(session, outputFile, outputFilePath):
     print('Grab a coffee this script takes a while...')
     print('Writing Headers')
     writeHeaders(outputFile)
-    print('Gathring data...')
+    print('Gathering data...')
     clustersInfo = getClustersInfo(session)
     writeClusterInfo(outputFile, clustersInfo)
     processClusterInfo(outputFilePath)
