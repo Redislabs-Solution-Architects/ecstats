@@ -6,10 +6,12 @@ The scripts extract your current usage in ElastiCache, in order to more accurate
 According to this information you can then plan a Redis Enterprise Cluster to address your current needs.
 
 ## How it works
+
 This pullElasticCacheStats script connects to your AWS account using boto3 (AWS API), and pulls out your current ElastiCache usage.
 The script pulls the stats from ElastiCache, CloudWatch and Cost Estimator API's for a a specified region.
 First the ElastiCache clusters information is extracted such as number of clusters and instance types.
-Then additional information is extracted from CloudWatch, such as the operations types and throughput, network utilization that are needed in order to plan a well fitted Redis Enterprise Cluster.
+Then additional information is extracted from CloudWatch, such as the operations types and throughput, network utilization 
+that are needed in order to plan a well fitted Redis Enterprise Cluster.
 
 You can see a sample out put sampleStats.csv in the outputs folder.
 
@@ -34,16 +36,36 @@ pip install -r requirements.txt
 deactivate
 ```
 
-## Configuring and Running
+In order to run the script configure your AWS_* environment variables and pass the path to the JSON config file or 
+specify all the parameters in a config file:
 
+```
+export AWS_ACCESS_KEY_ID=<ACCESS KEY ID>
+export AWS_SECRET_ACCESS_KEY=<SECRET ACCESS KEY>
+export AWS_DEFAULT_REGION=<REGION>
+export AWS_REGION=<REGION>
+```
+
+You can use a JSON config file
+The pullStatsConfig.json should contain the following information
+```
+{
+  "accessKey": "<ACCESS KEY ID>",
+  "secretKey": "<SECRET ACCESS KEY>",
+  "region": "<REGION>",
+  "outputFile": "<OUTPUT FILE>"
+}
+```
+
+Execute
+
+`python pullElasticCacheStats.py pullStatsConfig.json` 
+
+You can alternatively use config file
 ```
 # copy the configuration file and edit
 cp config.cfg.example config.cfg
 
 # run the script
 python pullElasticCacheStats.py -c config.cfg
-
-# The script will output CSV files in the local directory
-
 ```
-
