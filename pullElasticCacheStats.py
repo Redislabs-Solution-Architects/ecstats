@@ -12,7 +12,7 @@ try:
     from configparser import ConfigParser
 
 except ImportError:
-    import ConfigParser
+    from ConfigParser import ConfigParser
 
 def getCmdMetrics():
     metrics = [
