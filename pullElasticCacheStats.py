@@ -6,7 +6,13 @@
 import boto3, json, datetime, sys, os, getopt
 import pandas as pd
 from optparse import OptionParser
-from configparser import ConfigParser
+
+# Different versions of python 2.7 have renamed modules
+try:
+    from configparser import ConfigParser
+
+except ImportError:
+    from ConfigParser import ConfigParser
 
 def getCmdMetrics():
     metrics = [

@@ -11,3 +11,7 @@
 
 # Also don't want to check in any of the csv files
 *.csv
+
+# Don't checking docker stuffs
+docker/*.cfg
+docker/*.csv

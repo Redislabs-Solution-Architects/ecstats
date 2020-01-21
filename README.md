@@ -15,7 +15,21 @@ that are needed in order to plan a well fitted Redis Enterprise Cluster.
 
 You can see a sample out put sampleStats.csv in the outputs folder.
 
-## Getting Started
+## Running from Docker
+
+```
+# Copy config file and edit
+$ cp config.cfg.example docker/config.cfg
+
+# Run docker
+$ docker run -v$(pwd)/docker:/ec2rl:latest  maguec/ec2rl
+
+# Results will be stored in docker
+$ ls docker/*.csv
+docker/production-us-west-1.csv
+```
+
+## Running from source
 
 ```
 # Clone:
