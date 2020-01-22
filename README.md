@@ -1,17 +1,15 @@
-EC2RL
+ecstats
 =====
 
-EC2RL is a script which helps you migrate form AWS ElastiCache to Redis Enterprise.
-The scripts extract your current usage in ElastiCache, in order to more accurately calculate your dataset and throughput.
-According to this information you can then plan a Redis Enterprise Cluster to address your current needs.
+ecstats is a script which helps to capture your AWS ElastiCache usage.
+The scripts extract your current usage in ElastiCache, including the information such as throughput, dataset size and operation types.
 
 ## How it works
 
 This pullElasticCacheStats script connects to your AWS account using boto3 (AWS API), and pulls out your current ElastiCache usage.
 The script pulls the stats from ElastiCache, CloudWatch and Cost Estimator API's for a a specified region.
 First the ElastiCache clusters information is extracted such as number of clusters and instance types.
-Then additional information is extracted from CloudWatch, such as the operations types and throughput, network utilization 
-that are needed in order to plan a well fitted Redis Enterprise Cluster.
+Then additional information is extracted from CloudWatch, such as the operations types and throughput, network utilization to help better understand your Redis cluster utilization.
 
 You can see a sample out put sampleStats.csv in the outputs folder.
 
@@ -19,14 +17,14 @@ You can see a sample out put sampleStats.csv in the outputs folder.
 
 ```
 # Copy config file and edit
-$ cp config.cfg.example docker/config.cfg
+$ cp config.cfg.example config.cfg
 
-# Run docker
-$ docker run -v$(pwd)/docker:/ec2rl:latest  maguec/ec2rl
+# Run docker mount the current directory for the docker image
+$ docker run -v$(pwd):/ecstats docker.pkg.github.com/redislabs-solution-architects/ecstats/ecstats:1.0
 
-# Results will be stored in docker
-$ ls docker/*.csv
-docker/production-us-west-1.csv
+# Results will be stored in docker (example)
+$ ls *.csv
+production-us-east-2.csv
 ```
 
 ## Running from source
