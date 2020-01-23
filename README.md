@@ -15,14 +15,18 @@ You can see a sample out put sampleStats.csv in the outputs folder.
 
 ## Running from Docker
 
-```
 # Copy config file and edit
+```
 $ cp config.cfg.example config.cfg
+```
 
 # Run docker mount the current directory for the docker image
+```
 $ docker run -v$(pwd):/ecstats docker.pkg.github.com/redislabs-solution-architects/ecstats/ecstats:1.0
+```
 
-# Results will be stored in docker (example)
+# Results will be stored in the mounted folder (example)
+```
 $ ls *.csv
 production-us-east-2.csv
 ```
