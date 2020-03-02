@@ -64,4 +64,10 @@ Execute
 python pullElasticCacheStats.py -c config.cfg
 ```
 
+or to pull cloud watch stats for a longer period run
+
+```
+python pullElasticCacheStats.py -c config.cfg --days 31
+```
+
 The output will be a CSV files named according to the sections and region which are in the config file. 
