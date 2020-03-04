@@ -99,7 +99,7 @@ def writeCmdMetric(cloudWatch, clusterId, node, metric, outputFile):
             {'Name': 'CacheClusterId', 'Value': clusterId},
             {'Name': 'CacheNodeId', 'Value': node}
         ],
-        StartTime=(datetime.datetime.now() - datetime.timedelta(days=7)).isoformat(),
+        StartTime=(datetime.datetime.now() - datetime.timedelta(days=options.statsDays)).isoformat(),
         EndTime=datetime.datetime.now().isoformat(),
         Period=3600,
         Statistics=['Maximum']
@@ -125,7 +125,7 @@ def writeMetric(cloudWatch, clusterId, node, metric, outputFile):
             {'Name': 'CacheClusterId', 'Value': clusterId},
             {'Name': 'CacheNodeId', 'Value': node}
         ],
-        StartTime=(datetime.datetime.now() - datetime.timedelta(days=7)).isoformat(),
+        StartTime=(datetime.datetime.now() - datetime.timedelta(days=options.statsDays)).isoformat(),
         EndTime=datetime.datetime.now().isoformat(),
         Period=3600,
         Statistics=['Maximum']
@@ -241,6 +241,8 @@ def main():
                   help="Location of configuration file", metavar="FILE")
     parser.add_option("-d", "--out-dir", dest="outDir", default=".",
                   help="directory to write the results in", metavar="PATH")
+    parser.add_option("-p", "--days", dest="statsDays", default="7",
+                  help="day from which to fetch data", metavar="DATE")
     
 
     (options, args) = parser.parse_args()
