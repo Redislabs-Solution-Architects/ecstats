@@ -86,7 +86,7 @@ def getClustersInfo(session):
     return results
 
 
-def writeCmdMetric(cloudWatch, clusterId, node, metric, outputFile):
+def writeCmdMetric(cloudWatch, clusterId, node, metric, outputFile, options):
     """Write Redis commands metrics to the file
     Args:
         ClusterId, node and metric to write
@@ -99,7 +99,7 @@ def writeCmdMetric(cloudWatch, clusterId, node, metric, outputFile):
             {'Name': 'CacheClusterId', 'Value': clusterId},
             {'Name': 'CacheNodeId', 'Value': node}
         ],
-        StartTime=(datetime.datetime.now() - datetime.timedelta(days=options.statsDays)).isoformat(),
+        StartTime=(datetime.datetime.now() - datetime.timedelta(days=int(options.statsDays))).isoformat(),
         EndTime=datetime.datetime.now().isoformat(),
         Period=3600,
         Statistics=['Maximum']
@@ -112,7 +112,7 @@ def writeCmdMetric(cloudWatch, clusterId, node, metric, outputFile):
 
     outputFile.write("%s," % max)
 
-def writeMetric(cloudWatch, clusterId, node, metric, outputFile):
+def writeMetric(cloudWatch, clusterId, node, metric, outputFile, options):
     """Write node related metrics to file
     Args:
         ClusterId, node and metric to write
@@ -125,7 +125,7 @@ def writeMetric(cloudWatch, clusterId, node, metric, outputFile):
             {'Name': 'CacheClusterId', 'Value': clusterId},
             {'Name': 'CacheNodeId', 'Value': node}
         ],
-        StartTime=(datetime.datetime.now() - datetime.timedelta(days=options.statsDays)).isoformat(),
+        StartTime=(datetime.datetime.now() - datetime.timedelta(days=int(options.statsDays))).isoformat(),
         EndTime=datetime.datetime.now().isoformat(),
         Period=3600,
         Statistics=['Maximum']
@@ -150,7 +150,7 @@ def writeHeaders(outputFile):
         outputFile.write('%s (peak last week / hour),' % metric)
     outputFile.write("\r\n")
 
-def writeClusterInfo(outputFile, clustersInfo, cloudWatch):
+def writeClusterInfo(outputFile, clustersInfo, cloudWatch, options):
     """Write all the data gathered to the file
     Args:
         The cluster information dictionary
@@ -168,9 +168,9 @@ def writeClusterInfo(outputFile, clustersInfo, cloudWatch):
             outputFile.write("%s," % instanceDetails['CacheNodeType'])
             outputFile.write("%s," % instanceDetails['PreferredAvailabilityZone'])
             for metric in getMetrics():
-                writeMetric(cloudWatch, instanceId, node.get('CacheNodeId'), metric, outputFile)
+                writeMetric(cloudWatch, instanceId, node.get('CacheNodeId'), metric, outputFile, options)
             for metric in getCmdMetrics():
-                writeCmdMetric(cloudWatch, instanceId, node.get('CacheNodeId'), metric, outputFile)
+                writeCmdMetric(cloudWatch, instanceId, node.get('CacheNodeId'), metric, outputFile, options)
             outputFile.write("\r\n")
     outputFile.close()
 
@@ -222,14 +222,14 @@ def writeCosts(outputFile, session):
     print('###Done###')
 
 
-def processAWSAccount(session, outputFile, outputFilePath):
+def processAWSAccount(session, outputFile, outputFilePath, options):
     print('Grab a coffee this script takes a while...')
     print('Writing Headers')
     writeHeaders(outputFile)
     print('Gathering data...')
     clustersInfo = getClustersInfo(session)
     cloudWatch = session.client('cloudwatch')
-    writeClusterInfo(outputFile, clustersInfo, cloudWatch)
+    writeClusterInfo(outputFile, clustersInfo, cloudWatch, options)
     processClusterInfo(outputFilePath)
     outputFile = open(outputFilePath, "a")
     writeReservedInstances(outputFile, clustersInfo)
@@ -274,7 +274,7 @@ def main():
             aws_secret_access_key=secretKey,
             region_name=region)
 
-        processAWSAccount(session, outfile, outputFilePath)
+        processAWSAccount(session, outfile, outputFilePath, options)
 
 
 
