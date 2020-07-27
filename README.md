@@ -35,10 +35,10 @@ production-us-east-2.csv
 
 ```
 # Clone:
-git clone https://github.com/Redislabs-Solution-Architects/EC2RL
+git clone https://github.com/Redislabs-Solution-Architects/ecstats
 
 # Prepare virtualenv:
-cd EC2RL
+cd ecstats
 mkdir .env
 virtualenv .env
 
