@@ -23,7 +23,7 @@ $ cp config.cfg.example config.cfg
 
 # Run docker mount the current directory for the docker image
 ```
-$ docker run -v$(pwd):/ecstats docker.pkg.github.com/redislabs-solution-architects/ec2rl-internal/ec2rl-internal:latest
+$ docker run -v$(pwd):/ecstats docker.pkg.github.com/redislabs-solution-architects/ecstats/ecstats:latest
 ```
 
 # Results will be stored in the mounted folder (example)
