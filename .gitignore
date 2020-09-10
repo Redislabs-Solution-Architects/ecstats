@@ -11,3 +11,4 @@
 
 # Also don't want to check in any of the csv files
 *.csv
+!sample*

@@ -25,7 +25,7 @@ def getMetrics():
     metrics = [
         'CurrItems', 'BytesUsedForCache', 'CacheHits', 'CacheMisses', 'CurrConnections',
         'NetworkBytesIn', 'NetworkBytesOut', 'NetworkPacketsIn', 'NetworkPacketsOut',
-        'EngineCPUUtilization', 'Evictions', 'ReplicationBytes', 'ReplicationLag', ]
+        'EngineCPUUtilization', 'Evictions', 'ReplicationBytes', 'ReplicationLag']
     return metrics
 
 
@@ -86,11 +86,12 @@ def getClustersInfo(session):
     return results
 
 
-def writeCmdMetric(cloudWatch, clusterId, node, metric, outputFile, options):
+def getCmdMetric(cloudWatch, clusterId, node, metric, options):
     """Write Redis commands metrics to the file
     Args:
         ClusterId, node and metric to write
     Returns:
+    Returns the command metric
     """
     response = cloudWatch.get_metric_statistics(
         Namespace='AWS/ElastiCache',
@@ -110,13 +111,14 @@ def writeCmdMetric(cloudWatch, clusterId, node, metric, outputFile, options):
         if (rec['Maximum'] > max):
             max = rec['Maximum']
 
-    outputFile.write("%s," % max)
+    return(max)
 
-def writeMetric(cloudWatch, clusterId, node, metric, outputFile, options):
+def getMetric(cloudWatch, clusterId, node, metric, options):
     """Write node related metrics to file
     Args:
         ClusterId, node and metric to write
     Returns:
+    The metric value
     """
     response = cloudWatch.get_metric_statistics(
         Namespace='AWS/ElastiCache',
@@ -136,73 +138,74 @@ def writeMetric(cloudWatch, clusterId, node, metric, outputFile, options):
         if (rec['Maximum'] > max):
             max = rec['Maximum']
 
-    outputFile.write("%s," % max)
+    return(max)
 
-def writeHeaders(outputFile):
-    """Write file headers to the csv file
+def createDataFrame():
+    """Create an empty dataframe with headers
     Args:
     Returns:
+    The newely created pandas dataframe
     """
-    outputFile.write('ClusterId,NodeId,NodeType,Region,')
+    dfColumns = ["ClusterId","NodeId","NodeType","Region"]
     for metric in getMetrics():
-        outputFile.write('%s (max over last week),' % metric)
+        dfColumns.append(('%s (max over last week)' % metric))
     for metric in getCmdMetrics():
-        outputFile.write('%s (peak last week / hour),' % metric)
-    outputFile.write("\r\n")
+        dfColumns.append(('%s (peak last week / hour)' % metric))
+    df = pd.DataFrame(columns=dfColumns)
+    return (df)
 
-def writeClusterInfo(outputFile, clustersInfo, cloudWatch, options):
+def writeClusterInfo(df, clustersInfo, session, options):
     """Write all the data gathered to the file
     Args:
         The cluster information dictionary
     Returns:
     """
+    cloudWatch = session.client('cloudwatch')
+    row = []
+    i = 0
+
     for instanceId, instanceDetails in clustersInfo['elc_running_instances'].items():
         for node in instanceDetails.get('CacheNodes'):
             print("Getting node % s details" % (instanceDetails['CacheClusterId']))
             if 'ReplicationGroupId' in instanceDetails:
-                outputFile.write("%s," % instanceDetails['ReplicationGroupId'])
+                row.append("%s" % instanceDetails['ReplicationGroupId'])
             else:
-                outputFile.write(",")
+                row.append("")
 
-            outputFile.write("%s," % instanceId)
-            outputFile.write("%s," % instanceDetails['CacheNodeType'])
-            outputFile.write("%s," % instanceDetails['PreferredAvailabilityZone'])
+            row.append("%s" % instanceId)
+            row.append("%s" % instanceDetails['CacheNodeType'])
+            row.append("%s" % instanceDetails['PreferredAvailabilityZone'])
             for metric in getMetrics():
-                writeMetric(cloudWatch, instanceId, node.get('CacheNodeId'), metric, outputFile, options)
+                row.append(getMetric(cloudWatch, instanceId, node.get('CacheNodeId'), metric, options))
             for metric in getCmdMetrics():
-                writeCmdMetric(cloudWatch, instanceId, node.get('CacheNodeId'), metric, outputFile, options)
-            outputFile.write("\r\n")
-    outputFile.close()
+                row.append(getCmdMetric(cloudWatch, instanceId, node.get('CacheNodeId'), metric, options))
+            df.loc[i] = row
+            row = []
+            i += 1
+
+    df.sort_values(by=['NodeId'])
 
 
-def processClusterInfo(outputFilePath):
-    """Load the information and sort the results according ClusterId
-    Args:
-        Takes the outputfile
-    Returns:
-    """
-    outputDF = pd.read_csv(outputFilePath)
-    outputDF.sort_values(by=['ClusterId'], inplace=True)
-    outputDF.to_csv(outputFilePath)
+def getReservedInstances(clustersInfo):
+    #create the dataframe
+    dfColumns = ["Instance Type","Count","Remaining Time (days)"]
+    df = pd.DataFrame(columns=dfColumns)
 
-
-def writeReservedInstances(outputFile, clustersInfo):
-    outputFile.write("\r\n")
-    outputFile.write("\r\n")
-    outputFile.write("###Reserved Instances")
-    outputFile.write("\r\n")
-    outputFile.write("Instance Type, Count, Remaining Time (days)")
-    outputFile.write("\r\n")
+    row = []
+    i = 0
 
     for instanceId, instanceDetails in clustersInfo['elc_reserved_instances'].items():
-        outputFile.write("%s," % instanceId)
-        outputFile.write("%s," % instanceDetails['count'])
-        outputFile.write("%s," % instanceDetails['expiry_time'])
-        outputFile.write("\r\n")
+        row.append(("%s" % instanceId))
+        row.append(("%s" % instanceDetails['count']))
+        row.append(("%s," % instanceDetails['expiry_time']))
+        df.loc[i] = row
+        i = i + 1
+        row = []
+    
+    return(df, i)
 
-def writeCosts(outputFile, session):
-    outputFile.write("\r\n")
-    outputFile.write("costs\r\n")
+def getCosts(session):
+    #query pricing
     pr = session.client('ce')
     now = datetime.datetime.now()
     start = (now - datetime.timedelta(days=30)).strftime('%Y-%m-%d')
@@ -217,23 +220,42 @@ def writeCosts(outputFile, session):
     for res in pricingData['ResultsByTime']:
         costs = costs + float(res['Total']['UnblendedCost']['Amount'])
 
-    outputFile.write("####Total costs per month####  %s" % costs)
-    outputFile.close()
-    print('###Done###')
+    return(costs)
 
 
-def processAWSAccount(session, outputFile, outputFilePath, options):
+def processAWSAccount(config, section, options):
     print('Grab a coffee this script takes a while...')
+    # connect to ElastiCache 
+    # aws key, secret and region
+    region = config.get(section, 'region')
+    accessKey = config.get(section, 'aws_access_key_id')
+    secretKey = config.get(section, 'aws_secret_access_key')
+
+    session = boto3.Session(
+        aws_access_key_id=accessKey, 
+        aws_secret_access_key=secretKey,
+        region_name=region)
+
+    outputFilePath = "%s/%s-%s.xlsx" % (options.outDir, section, region)
+    writer = pd.ExcelWriter(outputFilePath, engine='xlsxwriter')
+
     print('Writing Headers')
-    writeHeaders(outputFile)
+    clusterDF = createDataFrame()
+
     print('Gathering data...')
     clustersInfo = getClustersInfo(session)
-    cloudWatch = session.client('cloudwatch')
-    writeClusterInfo(outputFile, clustersInfo, cloudWatch, options)
-    processClusterInfo(outputFilePath)
-    outputFile = open(outputFilePath, "a")
-    writeReservedInstances(outputFile, clustersInfo)
-    writeCosts(outputFile, session)
+
+    print('Writing data...')
+    writeClusterInfo(clusterDF, clustersInfo, session, options)
+    clusterDF.to_excel(writer, 'ClusterData')
+
+    (reservedDF, numOfInstances) = getReservedInstances(clustersInfo)
+    reservedDF.to_excel(writer, 'ReservedData')
+    ws = writer.sheets['ReservedData']
+    costs = getCosts(session)
+    ws.write(numOfInstances + 2, 0, "####Total costs per month####  %s" % costs)    
+
+    writer.save()
 
 def main():
     parser = OptionParser()
@@ -244,9 +266,7 @@ def main():
     parser.add_option("-p", "--days", dest="statsDays", default="7",
                   help="day from which to fetch data", metavar="DATE")
     
-
     (options, args) = parser.parse_args()
-
     if options.configFile == None:
         print("Please run with -h for help")
         sys.exit(1)
@@ -255,27 +275,10 @@ def main():
     config.read(options.configFile)
 
     for section in config.sections():
-
-        region = config.get(section, 'region')
-        accessKey = config.get(section, 'aws_access_key_id')
-        secretKey = config.get(section, 'aws_secret_access_key')
-
         if not os.path.isdir(options.outDir):
             os.makedirs(options.outDir)
 
-        outputFilePath = "%s/%s-%s.csv" % (options.outDir, section, region)
-
-        outfile = open(outputFilePath,"w+")
-
-        # connect to ElastiCache 
-        # aws key, secret and region
-        session = boto3.Session(
-            aws_access_key_id=accessKey, 
-            aws_secret_access_key=secretKey,
-            region_name=region)
-
-        processAWSAccount(session, outfile, outputFilePath, options)
-
+        processAWSAccount(config, section, options)
 
 
 if __name__ == "__main__" :

@@ -9,9 +9,10 @@ The scripts extract your current usage in ElastiCache, including the information
 This pullElasticCacheStats script connects to your AWS account using boto3 (AWS API), and pulls out your current ElastiCache usage.
 The script pulls the stats from ElastiCache, CloudWatch and Cost Estimator API's for a a specified region.
 First the ElastiCache clusters information is extracted such as number of clusters and instance types.
-Then additional information is extracted from CloudWatch, such as the operations types and throughput, network utilization to help better understand your Redis cluster utilization.
+Then additional information is extracted from CloudWatch, such as the operations types and throughput, network utilization 
+that are needed in order to plan a well fitted Redis Enterprise Cluster.
 
-You can see a sample out put sampleStats.csv in the outputs folder.
+You can see a sample out put sampleStats.xlsx in the outputs folder.
 
 ## Running from Docker
 
@@ -22,12 +23,12 @@ $ cp config.cfg.example config.cfg
 
 # Run docker mount the current directory for the docker image
 ```
-$ docker run -v$(pwd):/ecstats docker.pkg.github.com/redislabs-solution-architects/ecstats/ecstats:1.0
+$ docker run -v$(pwd):/ecstats docker.pkg.github.com/redislabs-solution-architects/ec2rl-internal/ec2rl-internal:latest
 ```
 
 # Results will be stored in the mounted folder (example)
 ```
-$ ls *.csv
+$ ls *.xlsx
 production-us-east-2.csv
 ```
 
