@@ -1,6 +1,9 @@
 # Ignore Mac 
 .DS_Store
 .vscode/*
+*.pyx
+*.db
+*.log
 
 # We don't want .env checked in
 .env
@@ -9,6 +12,12 @@
 *.cfg
 *.json
 
-# Also don't want to check in any of the csv files
+# Also don't want to check in any of the csv/xlsx files
 *.csv
+*.xlsx
 !sample*
+
+# No python compiled files
+*.pyc
+
+
