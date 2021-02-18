@@ -72,3 +72,40 @@ python pullElasticCacheStats.py -c config.cfg --days 31
 ```
 
 The output will be a CSV files named according to the sections and region which are in the config file. 
+
+## `pullRedisOpenSourceStats`
+The script extracts the current cluster usage by using the INFO and INFO COMMANDSTATS commands.
+These two Redis commands are called twice, in order to measure in order to capture the commands process during this timeframe. 
+
+The script takes as an input the following:
+- an Excel files with the Redis DB access configuration
+The Excel contains the following columns:
+
+DB Name - a logical name for the Redis DB
+Redis Host - the host/IP address of the DB
+Port - DB port
+Password - the DB password
+User (ACL) - a username to connect with to the DB which has privileges to the INFO command
+
+A template can be found in: `samples/sampleOSSPullInput.xlsx`.
+
+### Docker
+```
+$ docker run -v $PWD:/config docker.pkg.github.com/redislabs-solution-architects/ec2rl-internal/ec2rl-internal:latest python pullRedisOpenSourceStats.py /config/sampleOSSPullInput.xlsx
+```
+
+### Python
+
+```
+python pullRedisOpenSourceStats.py sampleOSSPullInput.xlsx
+```
+
+To run with a longer time interval between running INFO COMMANDSTATS add the duration parameter (in minutes).
+For example, running with 5 minutes interval run the following
+
+```
+python src/pullRedisOpenSourceStats.py sampleOSSPullInput.xlsx --duration 5
+```
+
+The output will be an Excel file with all the information gathered from the clusters. An example can be found in `samples/sampleOSSStats.xlsx`.
+
