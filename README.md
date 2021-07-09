@@ -1,38 +1,39 @@
 ecstats
 =====
 
-ecstats is a script which helps to capture your AWS ElastiCache usage.
-The scripts extract your current usage in ElastiCache, including the information such as throughput, dataset size and operation types.
+`ecstats` is the collective name of scripts (`pullElasticCacheStats.py`, `pullAzureCacheForRedisStats.py`, `pullRedisOpenSourceStats.py`) which will pull raw usage data from ElastiCache, Azure Cache for Redis and a Redis Open Source cluster, respectively.
 
-## How it works
+The output from these scripts are then analyzed using the tools in the (private to Redislabs) EC2RL-Internal toolset.
 
-This pullElasticCacheStats script connects to your AWS account using boto3 (AWS API), and pulls out your current ElastiCache usage.
-The script pulls the stats from ElastiCache, CloudWatch and Cost Estimator API's for a a specified region.
-First the ElastiCache clusters information is extracted such as number of clusters and instance types.
-Then additional information is extracted from CloudWatch, such as the operations types and throughput, network utilization 
-that are needed in order to plan a well fitted Redis Enterprise Cluster.
+# Assumptions
+We assume you have the appropriate CLI installed ([AWS](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html), [Azure](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli)) for your cloud provider and have appropriate authorization and authentication, or know the host/port/password if connecting to an OSS cluster.
 
-You can see a sample out put sampleStats.xlsx in the outputs folder.
+The easiest way forward is if you have [Docker installed](https://docs.docker.com/get-docker/).
 
-## Running from Docker
+For Azure, having [jq](https://stedolan.github.io/jq/) installed is helpful too (although if you've got Docker we'll assume you can use the [jq image for docker](https://hub.docker.com/r/stedolan/jq))
 
-# Copy config file and edit
+# Operation
+The simplest mechanism is to use the [ecstats Docker image](docker.pkg.github.com/redislabs-solution-architects/ecstats/ecstats:latest).
+
+Each script is a little different:
+
+## `pullElastiCacheStats.py`
+Executing this command is the default command in the docker file. 
+
+### Copy config file and edit
 ```
 $ cp config.cfg.example config.cfg
 ```
 
-# Run docker mount the current directory for the docker image
+### Run docker
 ```
-$ docker run -v$(pwd):/ecstats docker.pkg.github.com/redislabs-solution-architects/ecstats/ecstats:latest
+$ docker run -v $PWD:/ecstats docker.pkg.github.com/redislabs-solution-architects/ecstats/ecstats:latest
 ```
+Note that we mount the current directory onto `/ecstats`. This name `ecstats` is built into the default CMD, so go with it!
 
-# Results will be stored in the mounted folder (example)
-```
-$ ls *.xlsx
-production-us-east-2.csv
-```
+Results will be stored in the mounted folder. For each section in the config.cfg` file there'll be a an Excel file generated in the `/ecstats` directory (you did remember to mount that onto your current directory, didn't you?!)
 
-## Running from source
+### Running from source
 
 ```
 # Clone:
@@ -65,13 +66,30 @@ Execute
 python pullElasticCacheStats.py -c config.cfg
 ```
 
-or to pull cloud watch stats for a longer period run
+## `pullAzureCacheForRedis`
+The output will be in a file called `AzureStats.xlsx` in the current directory.
+
+### Docker
+You need to authenticate to Azure and setup an MSI first, before running the actual script. I've automated as much of this as possible, but if you don't want to run `jq` then simply run the `az ad ...` part of the command and create the necessary envars by hand.
 
 ```
-python pullElasticCacheStats.py -c config.cfg --days 31
+az login
+$(az ad sp create-for-rbac --name http://pullAzureStats  | docker run -i stedolan/jq -r '"export AZURE_CLIENT_ID=" + .appId + " AZURE_CLIENT_SECRET=" + .password + " AZURE_TENANT_ID=" +.tenant')
+docker run -e AZURE_TENANT_ID -e AZURE_CLIENT_ID -e AZURE_CLIENT_SECRET -v$(pwd):/ecstats docker.pkg.github.com/redislabs-solution-architects/ecstats/ecstats:latest python /app/pullAzureCacheForRedisStats.py -d /ecstats
 ```
 
-The output will be a CSV files named according to the sections and region which are in the config file. 
+The second line above sets up all the necessary envars.
+
+The `-d /ecstats` argument in the third line sets up the output directory to the directory mounted onto the current directory (so the output file will be available afterwards!)
+
+### Python
+Follow the instructions for the virtual environment above, then execute the following:
+
+```
+az login
+$(az ad sp create-for-rbac --name http://pullAzureStats  | jq -r '"export AZURE_CLIENT_ID=" + .appId + " AZURE_CLIENT_SECRET=" + .password + " AZURE_TENANT_ID=" +.tenant')
+python pullAzureCacheForRedisStats.py
+```
 
 ## `pullRedisOpenSourceStats`
 The script extracts the current cluster usage by using the INFO and INFO COMMANDSTATS commands.
@@ -91,20 +109,13 @@ A template can be found in: `samples/sampleOSSPullInput.xlsx`.
 
 ### Docker
 ```
-$ docker run -v $PWD:/config docker.pkg.github.com/redislabs-solution-architects/ec2rl-internal/ec2rl-internal:latest python pullRedisOpenSourceStats.py /config/sampleOSSPullInput.xlsx
+$ docker run -v $PWD:/ecstats docker.pkg.github.com/redislabs-solution-architects/ec2rl-internal/ec2rl-internal:latest python pullRedisOpenSourceStats.py /ecstats/sampleOSSPullInput.xlsx
 ```
 
 ### Python
 
 ```
 python pullRedisOpenSourceStats.py sampleOSSPullInput.xlsx
-```
-
-To run with a longer time interval between running INFO COMMANDSTATS add the duration parameter (in minutes).
-For example, running with 5 minutes interval run the following
-
-```
-python src/pullRedisOpenSourceStats.py sampleOSSPullInput.xlsx --duration 5
 ```
 
 The output will be an Excel file with all the information gathered from the clusters. An example can be found in `samples/sampleOSSStats.xlsx`.
