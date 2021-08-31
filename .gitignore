@@ -21,3 +21,5 @@
 *.pyc
 
 
+#Ignore lib folder
+/lib
