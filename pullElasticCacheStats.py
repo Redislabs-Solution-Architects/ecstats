@@ -14,8 +14,10 @@ import sys
 # Metric Collection Period (in days)
 METRIC_COLLECTION_PERIOD_DAYS = 7
 
-# Aggregation Duration (in seconds)
-AGGREGATION_DURATION_SECONDS = 3600
+
+SECONDS_IN_MINUTE = 60
+SECONDS_IN_HOUR = 3600
+SECONDS_IN_DAY = 24 * SECONDS_IN_HOUR
 
 # Different versions of python 2.7 have renamed modules
 try:
@@ -25,36 +27,51 @@ except ImportError:
     from ConfigParser import ConfigParser
 
 
-def get_cmd_metrics():
+def get_avg_metrics():
     metrics = [
-        'GetTypeCmds',
-        'HashBasedCmds',
-        'HyperLogLogBasedCmds',
-        'KeyBasedCmds',
-        'ListBasedCmds',
-        'SetBasedCmds',
-        'SetTypeCmds',
-        'SortedSetBasedCmds',
-        'StringBasedCmds',
-        'StreamBasedCmds']
+        ('GetTypeCmds', 'Average', SECONDS_IN_HOUR),
+        ('SetTypeCmds', 'Average', SECONDS_IN_HOUR),
+        ('HashBasedCmds', 'Average', SECONDS_IN_HOUR),
+        ('HyperLogLogBasedCmds', 'Average', SECONDS_IN_HOUR),
+        ('KeyBasedCmds', 'Average', SECONDS_IN_HOUR),
+        ('ListBasedCmds', 'Average', SECONDS_IN_HOUR),
+        ('SetBasedCmds', 'Average', SECONDS_IN_HOUR),
+        ('SortedSetBasedCmds', 'Average', SECONDS_IN_HOUR),
+        ('StringBasedCmds', 'Average', SECONDS_IN_HOUR),
+        ('StreamBasedCmds', 'Average', SECONDS_IN_HOUR)
+    ]
     return metrics
 
 
-def get_metrics():
+def get_max_metrics():
     metrics = [
-        'CurrItems',
-        'BytesUsedForCache',
-        'CacheHits',
-        'CacheMisses',
-        'CurrConnections',
-        'NetworkBytesIn',
-        'NetworkBytesOut',
-        'NetworkPacketsIn',
-        'NetworkPacketsOut',
-        'EngineCPUUtilization',
-        'Evictions',
-        'ReplicationBytes',
-        'ReplicationLag']
+        ('CurrItems', 'Maximum',
+         SECONDS_IN_DAY * METRIC_COLLECTION_PERIOD_DAYS),
+        ('BytesUsedForCache', 'Maximum',
+         SECONDS_IN_DAY * METRIC_COLLECTION_PERIOD_DAYS),
+        ('CacheHits', 'Maximum',
+         SECONDS_IN_DAY * METRIC_COLLECTION_PERIOD_DAYS),
+        ('CacheMisses', 'Maximum',
+         SECONDS_IN_DAY * METRIC_COLLECTION_PERIOD_DAYS),
+        ('CurrConnections', 'Maximum',
+         SECONDS_IN_DAY * METRIC_COLLECTION_PERIOD_DAYS),
+        ('NetworkBytesIn', 'Maximum',
+         SECONDS_IN_DAY * METRIC_COLLECTION_PERIOD_DAYS),
+        ('NetworkBytesOut', 'Maximum',
+         SECONDS_IN_DAY * METRIC_COLLECTION_PERIOD_DAYS),
+        ('NetworkPacketsIn', 'Maximum',
+         SECONDS_IN_DAY * METRIC_COLLECTION_PERIOD_DAYS),
+        ('NetworkPacketsOut', 'Maximum',
+         SECONDS_IN_DAY * METRIC_COLLECTION_PERIOD_DAYS),
+        ('EngineCPUUtilization', 'Maximum',
+         SECONDS_IN_DAY * METRIC_COLLECTION_PERIOD_DAYS),
+        ('Evictions', 'Maximum',
+         SECONDS_IN_DAY * METRIC_COLLECTION_PERIOD_DAYS),
+        ('ReplicationBytes', 'Maximum',
+         SECONDS_IN_DAY * METRIC_COLLECTION_PERIOD_DAYS),
+        ('ReplicationLag', 'Maximum',
+         SECONDS_IN_DAY * METRIC_COLLECTION_PERIOD_DAYS)
+    ]
     return metrics
 
 
@@ -115,7 +132,7 @@ def get_clusters_info(session):
     return results
 
 
-def get_metric(cloud_watch, cluster_id, node, metric, options):
+def get_metric(cloud_watch, cluster_id, node, metric, aggregation, period):
     """Write node related metrics to file
     Args:
         ClusterId, node and metric to write
@@ -133,16 +150,12 @@ def get_metric(cloud_watch, cluster_id, node, metric, options):
         ],
         StartTime=then.isoformat(),
         EndTime=today.isoformat(),
-        Period=AGGREGATION_DURATION_SECONDS,
-        Statistics=['Sum']
+        Period=period,
+        Statistics=[aggregation]
     )
 
-    rec_max = 0
-    for rec in response['Datapoints']:
-        if rec['Sum'] > rec_max:
-            rec_max = rec['Sum']
-
-    return rec_max
+    raw_data = [rec[aggregation] for rec in response['Datapoints']]
+    return raw_data
 
 
 def create_data_frame():
@@ -152,16 +165,17 @@ def create_data_frame():
     The newely created pandas dataframe
     """
     df_columns = ["ClusterId", "NodeId", "NodeType", "Region"]
-    for metric in get_metrics():
+    for metric, _, _ in get_max_metrics():
         df_columns.append(('%s (max over last week)' % metric))
-    for metric in get_cmd_metrics():
+    for metric, _, _ in get_avg_metrics():
         df_columns.append(('%s (peak last week / hour)' % metric))
     df = pd.DataFrame(columns=df_columns)
     return df
 
 
-def write_cluster_info(df, clusters_info, session, options):
-    """Write all the data gathered to the file
+def get_cluster_metrics(df, clusters_info, session):
+    """
+    Get all the metrics for the clusters in the given set of clusters
     Args:
         The cluster information dictionary
     Returns:
@@ -184,22 +198,26 @@ def write_cluster_info(df, clusters_info, session, options):
             row.append("%s" % instanceId)
             row.append("%s" % instanceDetails['CacheNodeType'])
             row.append("%s" % instanceDetails['PreferredAvailabilityZone'])
-            for metric in get_metrics():
-                row.append(
-                    get_metric(
-                        cloud_watch,
-                        instanceId,
-                        node.get('CacheNodeId'),
-                        metric,
-                        options))
-            for metric in get_cmd_metrics():
-                row.append(
-                    get_metric(
-                        cloud_watch,
-                        instanceId,
-                        node.get('CacheNodeId'),
-                        metric,
-                        options))
+            for (metric, aggregation, period) in get_max_metrics():
+                data_points = get_metric(
+                    cloud_watch,
+                    instanceId,
+                    node.get('CacheNodeId'),
+                    metric,
+                    aggregation,
+                    period)
+                data_point = 0 if len(data_points) == 0 else data_points[0]
+                row.append(data_point)
+            for (metric, aggregation, period) in get_avg_metrics():
+                data_points = get_metric(
+                    cloud_watch,
+                    instanceId,
+                    node.get('CacheNodeId'),
+                    metric,
+                    aggregation,
+                    period)
+                data_point = 0 if len(data_points) == 0 else max(data_points)
+                row.append(data_point)
             df.loc[i] = row
             row = []
             i += 1
@@ -226,31 +244,7 @@ def get_reserved_instances(clusters_info):
     return (df, i)
 
 
-def get_costs(session):
-    # query pricing
-    pr = session.client('ce')
-    now = datetime.datetime.now()
-    start = (now - datetime.timedelta(days=30)).strftime('%Y-%m-%d')
-    end = now.strftime('%Y-%m-%d')
-    pricing_data = pr.get_cost_and_usage(TimePeriod={'Start': start,
-                                                     'End': end},
-                                         Granularity='MONTHLY',
-                                         Filter={
-        "And": [{"Dimensions": {'Key': 'REGION',
-                                'Values': [session.region_name]}},
-                {"Dimensions": {'Key': 'SERVICE',
-                                'Values': ['Amazon ElastiCache']}}]},
-        Metrics=['UnblendedCost'])
-
-    costs = 0
-    for res in pricing_data['ResultsByTime']:
-        costs = costs + float(res['Total']['UnblendedCost']['Amount'])
-
-    return costs
-
-
-def process_aws_account(config, section, options):
-    print('Grab a coffee this script takes a while...')
+def process_aws_account(config, section, outDir):
     # connect to ElastiCache
     # aws key, secret and region
     region = config.get(section, 'region')
@@ -262,31 +256,19 @@ def process_aws_account(config, section, options):
         aws_secret_access_key=secret_key,
         region_name=region)
 
-    output_file_path = "%s/%s-%s.xlsx" % (options.outDir, section, region)
-    writer = pd.ExcelWriter(output_file_path, engine='xlsxwriter')
-
-    print('Writing Headers')
     cluster_df = create_data_frame()
 
-    print('Gathering data...')
     clusters_info = get_clusters_info(session)
 
-    print('Writing data...')
-    write_cluster_info(cluster_df, clusters_info, session, options)
-    cluster_df.to_excel(writer, 'ClusterData')
+    get_cluster_metrics(cluster_df, clusters_info, session)
 
-    (reservedDF, numOfInstances) = get_reserved_instances(clusters_info)
-    reservedDF.to_excel(writer, 'ReservedData')
-    ws = writer.sheets['ReservedData']
-    costs = get_costs(session)
-    ws.write(
-        numOfInstances +
-        2,
-        0,
-        "####Total costs per month####  %s" %
-        costs)
+    (reservedDF, _) = get_reserved_instances(clusters_info)
 
-    writer.save()
+    output_file_path = "%s/%s-%s.xlsx" % (outDir, section, region)
+    print(f"Writing {output_file_path}")
+    with pd.ExcelWriter(output_file_path, engine='xlsxwriter') as writer:
+        cluster_df.to_excel(writer, 'ClusterData')
+        reservedDF.to_excel(writer, 'ReservedData')
 
 
 def main():
@@ -296,19 +278,19 @@ def main():
     parser.add_option("-d", "--out-dir", dest="outDir", default=".",
                       help="directory to write the results in", metavar="PATH")
 
-    (options, args) = parser.parse_args()
+    (options, _) = parser.parse_args()
     if options.configFile is None:
-        print("Please run with -h for help")
+        parser.print_help()
         sys.exit(1)
 
     config = ConfigParser()
     config.read(options.configFile)
 
-    for section in config.sections():
-        if not os.path.isdir(options.outDir):
-            os.makedirs(options.outDir)
+    if not os.path.isdir(options.outDir):
+        os.makedirs(options.outDir)
 
-        process_aws_account(config, section, options)
+    for section in config.sections():
+        process_aws_account(config, section, options.outDir)
 
 
 if __name__ == "__main__":
