@@ -250,10 +250,11 @@ def process_aws_account(config, section, outDir):
     region = config.get(section, 'region')
     access_key = config.get(section, 'aws_access_key_id')
     secret_key = config.get(section, 'aws_secret_access_key')
-
+    session_token = config.get(section, 'aws_session_token')
     session = boto3.Session(
         aws_access_key_id=access_key,
         aws_secret_access_key=secret_key,
+	aws_session_token=session_token,
         region_name=region)
 
     cluster_df = create_data_frame()
