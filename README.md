@@ -1,6 +1,8 @@
-ecstats
-=====
+# Deprecated
+This repositiry is deprecated. You can pull raw usage data from Elasticache using [this](https://github.com/Redislabs-Solution-Architects/ecstats2) repository and from Redis Open Source cluster using [this](https://github.com/Redislabs-Solution-Architects/osstats) repository, respectively.
+#
 
+# ecstats
 `ecstats` is the collective name of scripts (`pullElasticCacheStats.py`, `pullAzureCacheForRedisStats.py`, `pullRedisOpenSourceStats.py`) which will pull raw usage data from ElastiCache, Azure Cache for Redis and a Redis Open Source cluster, respectively.
 
 The output from these scripts are then analyzed using the tools in the (private to Redislabs) EC2RL-Internal toolset.
